@@ -69,11 +69,11 @@ void main() {
 		cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
 		
 		//Creation of a surface cuda
-		cudaArray_t array_map;
-		cudaMallocArray(&array_map, &channelDesc, kWidth, kHeight, cudaArraySurfaceLoadStore);
-		cuda_resource_desc.res.array.array = array_map;
-		cudaSurfaceObject_t surface_map = 0;
-		cudaCreateSurfaceObject(&surface_map, &cuda_resource_desc);
+		cudaArray_t array;
+		cudaMallocArray(&array, &channelDesc, kWidth, kHeight, cudaArraySurfaceLoadStore);
+		cuda_resource_desc.res.array.array = array;
+		cudaSurfaceObject_t surface = 0;
+		cudaCreateSurfaceObject(&surface, &cuda_resource_desc);
 
 		//Main loop
 		while (!glfwWindowShouldClose(window)) {
