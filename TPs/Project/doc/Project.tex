@@ -25,7 +25,7 @@ The project needs to be sent four days before the final exam. Only the source co
 The project is an ant simulation. Ants must leave the anthill to find some resources. The only ability they have is to put pheromone on the floor. Thus pheromones can store information like the distance to the anthill or the food.
 \begin{figure}[H]
 	\centering
-	\includegraphics[scale=0.8]{figures/ant.png}
+	\includegraphics[scale=0.74]{figures/project.png}
 	\caption{The ant simulation}
 \end{figure}
 
@@ -110,7 +110,7 @@ Be careful, this code is in GLSL. You need to convert it into CUDA code if you w
 If you make the choice to draw the same amount of object in your scene, you need to check the performance of your algorithm. To do so, you need to profile your kernel. A good option is to use the nvprof tool from the CUDA SDK or a custom computation of the Frame Per Second. Most of the time, the FPS are computed simply because it a better metric when you work on a software. Be careful, Drawing the FPS value a lot of time per second will slow down your simulation. A good option is to print it every second in the terminal or in the title of the window.
 
 \section{Ants}
-The aim of the ants is to move from the anthill and go to the food or the water and come back when they find some resources. They can go through stick but you cannot walk on rock. One solution can be to find every direction possible (the 8 cases around the ant) and invalid directions that lead to the rock. Moving ants randomly may be the first step to implement. Unfortunately, random in GPGPU is not easy. You can use cuRand to create random number or you can using this formula:
+The aim of the ants is to move from the anthill and go to the food or the water and come back when they find some resources. They can go through stick but you cannot walk on rock. Ant can have for example a forward direction and a radius of detection. Moving ants randomly may be the first step to implement. To do so, we can rotate the direction of an angle between $\frac{-\pi}{4}$ and $\frac{\pi}{4}$ and add the new direction of the ant to its position. The maximum random angle can be part of the ant struct or hard codded. Having an angle smaller than $\pi$ will force the ant to explore the environment instead of randomly walking around the anthill. Unfortunately, random in GPGPU is not easy. You can use cuRand to create random number or you can using this formula:
 \begin{lstlisting}
 __device__ float random(float x, float y) {
 	float t = 12.9898f*x + 78.233f*y;
@@ -120,12 +120,20 @@ __device__ float random(float x, float y) {
 We simply generate a sinus function with a very high frequency and we grab only the absolute value of the fractional part of the result. This give us a number between 0 and 1. The function need a seed generator, the value of u and v are good candidates.
 
 \subsection{Pheromones}
-Ants use pheromones to communicate with other ants. A good way to implement it is to create a new surface to store the value of the pheromone. Each ant will send a pheromone with a value of 0.01 and will try to find the strongest pheromone around. For each frame, each value of pheromone will be reduce by 0.0001.
+Ants use pheromones to communicate with other ants. A good way to implement it is to create a new surface to store the value of the pheromone. Each ant will send a pheromone with a value of 0.01 and will try to find the strongest pheromone around. For each frame, each value of pheromone will be reduce by 0.0001 for the pheromone of the anthill and 0.03 for the pheromones of the food and the water for example. Thus values can be adapted if you choose a large among of ants. Basically, less evaporated pheromones will lead to more sub optimal path. A strong evaporation will lost ants.
 \begin{figure}[H]
 	\centering
-	\includegraphics[scale=0.9]{figures/know.png}
+	\includegraphics[scale=0.7]{figures/know.png}
 	\caption{The known map}
 \end{figure}
-On of the possible optimization is to use the same kernel to read and write the pheromone map. You don't want to read a value will another thread to currently writing a new value in the same pixel. To avoid this situation you can tell to threads to only read the pixel, synchronize all the threads and then write the new value. The CUDA function to do it is : \_\_syncthreads();
+\subsection{Read the pheromone}
+\begin{figure}[H]
+	\centering
+	\includegraphics[scale=0.5]{figures/ant_perception.png}
+	\caption{The known map}
+\end{figure}
+Because ants can only perceive the environment in front of them we must only consider front pixel. In the example, the ant can read the six pixel in front of its. Reading the pheromone is done in a loop over the pixel depending of the size of the perception radius. A good perception radius is more than 5 pixels. The dark blue square means a lot of ants find some water and put some water pheromone in this case. The more ant stacks pheromones the more the pixel become blue. We can now ask to the ant to rotate in the direction of the best candidate.
+\subsection{Write the pheromone}
+Just before moving, the ant need to store a pheromone in its position.A good idea is to write the value in the same pheromone surface you use decide where you want to go. However, if one ant finish its move and write its pheromone will another ant is currently reading the same pixel, you will have a read/write conflict. You don't want to read a value will another thread to currently writing a new value in the same pixel. To avoid this situation you can tell to threads to only read the pixel, synchronize all the threads and then write the new value. The CUDA function to do it is : \_\_syncthreads(); You can use it inside the kernel between the read and write.
 
 \end{document}
