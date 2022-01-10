@@ -25,15 +25,21 @@ void main() {
 	if (!glfwInit()) {
 		glfwTerminate();
 	}
+	//Select the OpenGL version 4.1
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
 	GLFWwindow* window = glfwCreateWindow(1024, 1024, "ISIMA_PROJECT", nullptr, nullptr);
 	if (window) {
+		//Set the OpenGL context available. OpenGL function can be called after this function
 		glfwMakeContextCurrent(window);
+		//Load the OpenGL function pointer from the graphic library.
 		gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
+
+		//Clear the background to black
 		glClearColor(0.0, 0.0, 0.0, 1.0);
 		glDisable(GL_DEPTH_TEST);
 
+		//Creation of the OpenGL texture
 		GLuint texture;
 		glGenTextures(1, &texture);
 		glBindTexture(GL_TEXTURE_2D, texture);
@@ -42,34 +48,54 @@ void main() {
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, 1024, 1024, 0, GL_RGBA, GL_FLOAT, nullptr);
 		glBindTexture(GL_TEXTURE_2D, 0);
 		cudaGLSetGLDevice(0);
-		cudaGraphicsResource_t cuda_graphics_resource;
-		cudaGraphicsGLRegisterImage(&cuda_graphics_resource, texture, GL_TEXTURE_2D, cudaGraphicsRegisterFlagsSurfaceLoadStore);
+		cudaGraphicsResource_t cuda_graphic_resource;
+		cudaGraphicsGLRegisterImage(&cuda_graphic_resource, texture, GL_TEXTURE_2D, cudaGraphicsRegisterFlagsSurfaceLoadStore);
+		//OpenGL object to print the texture on screen
 		GLuint fbo = 0;
 		glGenFramebuffers(1, &fbo);
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo);
 		glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, 0);
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
 
+		//Limit the FPS to 60 (0 to set to unlimited)
 		glfwSwapInterval(1);
+
 		glfwSetKeyCallback(window, key_callback);
 
+		//Creation of the cuda resource desc
+		cudaResourceDesc cuda_resource_desc;
+		memset(&cuda_resource_desc, 0, sizeof(cuda_resource_desc));
+		cuda_resource_desc.resType = cudaResourceTypeArray;
+		cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
+		
+		//Creation of a surface cuda
+		cudaArray_t array_map;
+		cudaMallocArray(&array_map, &channelDesc, kWidth, kHeight, cudaArraySurfaceLoadStore);
+		cuda_resource_desc.res.array.array = array_map;
+		cudaSurfaceObject_t surface_map = 0;
+		cudaCreateSurfaceObject(&surface_map, &cuda_resource_desc);
+
+		//Main loop
 		while (!glfwWindowShouldClose(window)) {
+			showFPS(window);
 			glfwPollEvents();
 			int width, height;
 			glfwGetFramebufferSize(window, &width, &height);
 
-			//interop
-			cudaGraphicsMapResources(1, &cuda_graphics_resource);
-			cudaArray_t writeArray;
-			cudaGraphicsSubResourceGetMappedArray(&writeArray, cuda_graphics_resource, 0, 0);
-			cudaResourceDesc wdsc;
-			wdsc.resType = cudaResourceTypeArray;
-			wdsc.res.array.array = writeArray;
-			cudaSurfaceObject_t surface;
-			cudaCreateSurfaceObject(&surface, &wdsc);
-			//TODO Draw the map on the surface
-			cudaDestroySurfaceObject(surface);
-			cudaGraphicsUnmapResources(1, &cuda_graphics_resource);
+			//Update the simulation for each frame
+			//TODO
+
+			//Setup the OpenGL texture 
+			cudaGraphicsMapResources(1, &cuda_graphic_resource);
+			cudaArray_t array_OpenGL;
+			cudaGraphicsSubResourceGetMappedArray(&array_OpenGL, cuda_graphic_resource, 0, 0);
+			cuda_resource_desc.res.array.array = array_OpenGL;
+			cudaSurfaceObject_t surface_OpenGL;
+			cudaCreateSurfaceObject(&surface_OpenGL, &cuda_resource_desc);
+			//Copy the cuda surface into the surface_OpenGL
+			//CopyTo(surface, surface_OpenGL, kWidth, kHeight);
+			cudaDestroySurfaceObject(surface_OpenGL);
+			cudaGraphicsUnmapResources(1, &cuda_graphic_resource);
 			cudaStreamSynchronize(0);
 
 			glViewport(0, 0, width, height);
